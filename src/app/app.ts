@@ -30,8 +30,26 @@ async startRecording(): Promise<void> {
       // Check if the selected surface is 'monitor' (entire screen)
       const videoTrack = this.stream.getVideoTracks()[0];
       const settings = videoTrack.getSettings();
-      if (settings.displaySurface !== 'monitor') {
-        // Stop the stream if not entire screen
+      const isFirefox = /Firefox/.test(navigator.userAgent);
+
+      let isEntireScreen = false;
+      if (isFirefox || !settings.displaySurface) {
+        // Workaround for Firefox or browsers without displaySurface
+        const screenWidth = window.screen.width;
+        const screenHeight = window.screen.height;
+        const trackWidth = settings.width || 0;
+        const trackHeight = settings.height || 0;
+
+        // Allow some tolerance (e.g., for scaling or minor differences)
+        const widthMatch = Math.abs(trackWidth - screenWidth) <= 100;
+        const heightMatch = Math.abs(trackHeight - screenHeight) <= 100;
+        isEntireScreen = widthMatch && heightMatch;
+        console.log(`Firefox workaround: Track resolution ${trackWidth}x${trackHeight}, Screen resolution ${screenWidth}x${screenHeight}, Is entire screen: ${isEntireScreen}`);
+      } else {
+        isEntireScreen = settings.displaySurface === 'monitor';
+      }
+
+      if (!isEntireScreen) {
         this.stream.getTracks().forEach(track => track.stop());
         this.preview.nativeElement.srcObject = null;
         this.preview.nativeElement.style.display = 'none';
@@ -53,8 +71,22 @@ async startRecording(): Promise<void> {
       this.preview.nativeElement.srcObject = this.stream;
       this.preview.nativeElement.style.display = 'block';
 
+      // Select a supported mimeType for MediaRecorder
+      const mimeTypes = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm',
+        'video/mp4'
+      ];
+      const supportedMimeType = mimeTypes.find(mime => MediaRecorder.isTypeSupported(mime));
+      if (!supportedMimeType) {
+        throw new Error('No supported video codec found for recording');
+      }
+      console.log(`Using mimeType: ${supportedMimeType}`);
+
+
       // Initialize MediaRecorder
-      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType: 'video/webm;codecs=vp9' });
+      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType: supportedMimeType });
       this.recordedChunks = [];
 
       // Collect recorded data
@@ -127,7 +159,7 @@ async startRecording(): Promise<void> {
           suggestedName: 'screen-recording.webm',
           types: [{
             description: 'Video File',
-            accept: { 'video/webm': ['.webm'] }
+            accept: { 'video/webm': ['.webm'], 'video/mp4': ['.mp4']}
           }]
         });
         const writable = await handle.createWritable();
@@ -135,11 +167,12 @@ async startRecording(): Promise<void> {
         await writable.close();
         console.log('File saved via showSaveFilePicker');
       } else {
-        // Fallback: Create a download link
+       // Fallback: Create a download link
+        const extension = blob.type.startsWith('video/mp4') ? 'mp4' : 'webm';
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'screen-recording.webm';
+        a.download = `screen-recording.${extension}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
