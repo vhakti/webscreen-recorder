@@ -153,6 +153,7 @@ async startRecording(): Promise<void> {
         throw new Error('El archivo grabado está vacío');
       }
 
+      //este bloque solo sirve para el demo:
       if (!useFallback && 'showSaveFilePicker' in window) {
         // Try using showSaveFilePicker if in user gesture context
         const handle = await (window as any).showSaveFilePicker({
@@ -236,7 +237,7 @@ async startRecording(): Promise<void> {
   }
 
   private async handleStopConfirmation(fromBrowserStop: boolean): Promise<boolean> {
-  const result = window.confirm('¿Estás seguro de detener la grabación?');
+  const result = window.confirm('¿Estás seguro de detener la grabación? si la detiene la evaluación se dará terminada también.');
   if (result && fromBrowserStop) {
     await this.completeStop(true);
   }else{
